@@ -2,6 +2,8 @@
 name = "gltf_unlit_generator"
 version = "0.1.0"
 authors = ["Robert Long <rlong@mozilla.com>"]
+license = "MPL-2.0"
+description = "Generates an unlit texture for each of the materials in a .gltf file."
 exclude = ["assets/*"]
 
 [dependencies]
