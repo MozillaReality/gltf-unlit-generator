@@ -5,6 +5,7 @@ authors = ["Robert Long <rlong@mozilla.com>"]
 license = "MPL-2.0"
 description = "Generates an unlit texture for each of the materials in a .gltf file."
 include = ["src/**/*.rs", "Cargo.toml"]
+repository= "https://github.com/MozillaReality/gltf-unlit-generator.git"
 
 [dependencies]
 image = "0.18.0"

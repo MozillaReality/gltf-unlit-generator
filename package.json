@@ -3,6 +3,10 @@
   "version": "0.2.0",
   "main": "src/index.js",
   "license": "MPL-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MozillaReality/gltf-unlit-generator.git"
+  },
   "dependencies": {
     "commander": "^2.15.1",
     "fs-extra": "^5.0.0"
