@@ -4,7 +4,7 @@ version = "0.2.0"
 authors = ["Robert Long <rlong@mozilla.com>"]
 license = "MPL-2.0"
 description = "Generates an unlit texture for each of the materials in a .gltf file."
-exclude = ["assets/*"]
+include = ["src/**/*.rs", "Cargo.toml", "LICENSE.md"]
 
 [dependencies]
 image = "0.18.0"
