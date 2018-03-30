@@ -1,23 +1,33 @@
 extern crate image;
 extern crate clap;
 extern crate gltf;
+extern crate serde_json;
 
+use std::fs;
 use std::fs::File;
 use std::io::BufReader;
 use std::path::Path;
 use std::process;
 
-use clap::App;
+use clap::{App, Arg};
 
 use gltf::Gltf;
 use gltf::Material;
 use gltf::image::Data;
+
+use serde_json::Value;
 
 fn main() {
     let matches = App::new("gltf_unlit_generator")
         .version("0.1")
         .about("Generates an unlit texture for a .gltf file.")
         .args_from_usage("[input] 'input .gltf file'")
+        .arg(Arg::with_name("out")
+            .short("o")
+            .long("out")
+            .value_name("out")
+            .help("Where to output the texture files.")
+            .takes_value(true))
         .get_matches();
 
     if let Some(gltf_file_path) = matches.value_of("input") {
@@ -26,24 +36,45 @@ fn main() {
 
             let gltf_path = Path::new(gltf_file_path).parent().unwrap();
 
-            for material in gltf.materials() {
-                generate_unlit(gltf_path, material)
-            }
+            let out_path = matches.value_of("out")
+                .map_or(gltf_path.clone(), |out| Path::new(out));
 
-            println!("Done!");
+            let generated_textures: Vec<_> = gltf.materials()
+                .map(|material| generate_unlit(gltf_path, out_path, material))
+                .collect();
+
+            println!("{}", Value::Array(generated_textures));
             process::exit(0);
         }
+
+        println!("filePath: {}", gltf_file_path);
     }
 
-    eprintln!("Please provide a path to a .gltf file");
+    println!("{}", Value::Null);
     process::exit(1);
 }
 
-fn generate_unlit<'a>(gltf_path: &Path, material: Material) {
+fn generate_unlit<'a>(gltf_path: &Path, out_path: &Path, material: Material) -> Value {
     let pbr = material.pbr_metallic_roughness();
 
+    let base_color_factor = pbr.base_color_factor();
+
     // Set the unlit_map to the base color map if it exists
-    let unlit_map = load_texture_info_image(gltf_path, pbr.base_color_texture());
+    let unlit_map = match load_texture_info_image(gltf_path, pbr.base_color_texture()) {
+        Some(base_color_texture) => {
+            let mut base_color_texture = base_color_texture;
+
+            for (_, _, mut pixel) in base_color_texture.enumerate_pixels_mut() {
+                pixel.data[0] = (pixel.data[0] as f32 * base_color_factor[0]) as u8;
+                pixel.data[1] = (pixel.data[1] as f32 * base_color_factor[1]) as u8;
+                pixel.data[2] = (pixel.data[2] as f32 * base_color_factor[2]) as u8;
+                pixel.data[3] = (pixel.data[3] as f32 * base_color_factor[3]) as u8;
+            }
+
+            Some(base_color_texture)
+        },
+        None => None
+    };
 
     let occlusion_texture = material.occlusion_texture();
 
@@ -106,10 +137,15 @@ fn generate_unlit<'a>(gltf_path: &Path, material: Material) {
                 Some(name) => format!("{}_unlit.png", name),
                 None => format!("unlit_{}.png", material.index().unwrap())
             };
-            let fout = &gltf_path.join(path);
+
+            fs::create_dir_all(&out_path).unwrap();
+
+            let fout = &out_path.join(path);
             unlit_map.save(fout).unwrap();
+
+            Value::String(String::from(fout.to_str().unwrap()))
         }
-        None => ()
+        None => Value::Null
     }
 }
 
@@ -134,7 +170,7 @@ fn load_texture_image(gltf_path: &Path, texture: gltf::Texture) -> Option<image:
             }
         },
         Data::View { .. } => {
-            println!("Warning: Images in data views not currently supported. Skipping image[{}].", image.index());
+            eprintln!("Warning: Images in data views not currently supported. Skipping image[{}].", image.index());
             None
         }
     }

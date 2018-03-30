@@ -1,0 +1,38 @@
+#!/usr/bin/env node
+
+const program = require("commander");
+const generateUnlitTextures = require("../src/index");
+const fs = require("fs-extra");
+const path = require("path");
+const package = fs.readJSONSync(path.join(__dirname, "..", "package.json"));
+
+program
+  .version(package.version)
+  .usage('<gltfPath> [options]')
+  .option("-o, --out <out>", "The directory to output the gltf and textures.")
+  .action((configPath, options) => {
+    execute(configPath, options.out).then(() => {
+      process.exit(0);
+    }).catch((err) => {
+      throw err;
+    });
+  });
+
+async function execute(gltfPath, outPath) {
+  if (!fs.existsSync(gltfPath)) {
+    throw new Error(`gltf file: ${gltfPath} does not exist`);
+  }
+
+  const absoluteGltfPath = path.resolve(gltfPath);
+  const absoluteOutPath = path.resolve(outPath);
+
+  await generateUnlitTextures(absoluteGltfPath, absoluteOutPath);
+
+  console.log("Done!");
+}
+
+program.parse(process.argv);
+
+if (program.args.length === 0) {
+  program.outputHelp();
+}
