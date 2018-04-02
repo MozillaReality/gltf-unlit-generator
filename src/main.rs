@@ -1,6 +1,7 @@
 extern crate image;
 extern crate clap;
 extern crate gltf;
+extern crate gltf_json;
 extern crate serde_json;
 
 use std::fs;
@@ -14,6 +15,8 @@ use clap::{App, Arg};
 use gltf::Gltf;
 use gltf::Material;
 use gltf::image::Data;
+
+use gltf_json::material::AlphaMode;
 
 use serde_json::Value;
 
@@ -132,18 +135,24 @@ fn generate_unlit<'a>(gltf_path: &Path, out_path: &Path, material: Material) -> 
     
     match unlit_map {
         Some(unlit_map) => {
-            
-            let path = match material.name() {
-                Some(name) => format!("{}_unlit.png", name),
-                None => format!("unlit_{}.png", material.index().unwrap())
-            };
 
             fs::create_dir_all(&out_path).unwrap();
 
-            let fout = &out_path.join(path);
-            unlit_map.save(fout).unwrap();
+            let material_name = match material.name() {
+                Some(name) => format!("{}_unlit", name),
+                None => format!("unlit_{}", material.index().unwrap())
+            };
 
-            Value::String(String::from(fout.to_str().unwrap()))
+            let material_file_name = match material.alpha_mode() {
+                AlphaMode::Opaque => material_name + ".jpg",
+                _ => material_name + ".png"
+            };
+
+            let file_path = &out_path.join(material_file_name);
+
+            unlit_map.save(file_path).unwrap();
+
+            Value::String(String::from(file_path.to_str().unwrap()))
         }
         None => Value::Null
     }
