@@ -99,10 +99,10 @@ fn generate_unlit<'a>(gltf_path: &Path, out_path: &Path, material: Material) -> 
 
                     Some(unlit_map)
                 },
-                None => None
+                None => unlit_map
             }
         },
-        None => None
+        None => unlit_map
     };
 
     let emissive_factor = material.emissive_factor();
@@ -127,7 +127,7 @@ fn generate_unlit<'a>(gltf_path: &Path, out_path: &Path, material: Material) -> 
 
             Some(unlit_map)
         },
-        None => None
+        None => unlit_map
     };
     
     match unlit_map {
