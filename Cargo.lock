@@ -198,20 +198,19 @@ dependencies = [
  "clap 2.31.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "gltf 0.10.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "gltf-json 0.10.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "image 0.18.0 (git+https://github.com/PistonDevelopers/image.git)",
+ "image 0.18.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_json 1.0.13 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
 name = "image"
 version = "0.18.0"
-source = "git+https://github.com/PistonDevelopers/image.git#abaafbc70b7f83b205c935fb87a07021ed0d5535"
+source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "byteorder 1.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "enum_primitive 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "gif 0.9.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "jpeg-decoder 0.1.14 (registry+https://github.com/rust-lang/crates.io-index)",
- "lzw 0.10.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "num-iter 0.1.35 (registry+https://github.com/rust-lang/crates.io-index)",
  "num-rational 0.1.42 (registry+https://github.com/rust-lang/crates.io-index)",
  "num-traits 0.1.43 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -570,7 +569,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 "checksum gltf 0.10.1 (registry+https://github.com/rust-lang/crates.io-index)" = "7d0286126b9cc1546e1349744446276533166a344c9396ecbd3d3d924dd77d4c"
 "checksum gltf-derive 0.10.1 (registry+https://github.com/rust-lang/crates.io-index)" = "801d3c74075a438498a80742ea5ac2b91d94933704830f6f72330724ebb71fcf"
 "checksum gltf-json 0.10.1 (registry+https://github.com/rust-lang/crates.io-index)" = "b57853e1d8dfe819e8a6091314544be4fc5071a62e1e573c9a85d7bbb8d5f805"
-"checksum image 0.18.0 (git+https://github.com/PistonDevelopers/image.git)" = "<none>"
+"checksum image 0.18.0 (registry+https://github.com/rust-lang/crates.io-index)" = "545f000e8aa4e569e93f49c446987133452e0091c2494ac3efd3606aa3d309f2"
 "checksum inflate 0.3.4 (registry+https://github.com/rust-lang/crates.io-index)" = "f5f9f47468e9a76a6452271efadc88fe865a82be91fe75e6c0c57b87ccea59d4"
 "checksum inflections 1.1.1 (registry+https://github.com/rust-lang/crates.io-index)" = "a257582fdcde896fd96463bf2d40eefea0580021c0712a0e2b028b60b47a837a"
 "checksum itoa 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)" = "c069bbec61e1ca5a596166e55dfe4773ff745c3d16b700013bcaff9a6df2c682"
