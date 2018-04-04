@@ -63,38 +63,30 @@ fn generate_unlit<'a>(gltf_path: &Path, out_path: &Path, material: Material) -> 
     let base_color_factor = pbr.base_color_factor();
 
     // Set the unlit_map to the base color map if it exists
-    let unlit_map = match load_texture_info_image(gltf_path, pbr.base_color_texture()) {
-        Some(base_color_texture) => {
-            let mut base_color_texture = base_color_texture;
-
-            for (_, _, mut pixel) in base_color_texture.enumerate_pixels_mut() {
-                pixel.data[0] = (pixel.data[0] as f32 * base_color_factor[0]) as u8;
-                pixel.data[1] = (pixel.data[1] as f32 * base_color_factor[1]) as u8;
-                pixel.data[2] = (pixel.data[2] as f32 * base_color_factor[2]) as u8;
-                pixel.data[3] = (pixel.data[3] as f32 * base_color_factor[3]) as u8;
-            }
-
-            Some(base_color_texture)
-        },
-        None => None
-    };
+    let unlit_map = load_texture_info_image(gltf_path, pbr.base_color_texture()).map(|mut base_color_texture| {
+        for mut pixel in base_color_texture.pixels_mut() {
+            pixel.data[0] = (pixel.data[0] as f32 * base_color_factor[0]) as u8;
+            pixel.data[1] = (pixel.data[1] as f32 * base_color_factor[1]) as u8;
+            pixel.data[2] = (pixel.data[2] as f32 * base_color_factor[2]) as u8;
+            pixel.data[3] = (pixel.data[3] as f32 * base_color_factor[3]) as u8;
+        }
+        base_color_texture
+    });
 
     let occlusion_texture = material.occlusion_texture();
 
     // Multiply the occlusion map if it exists
     let unlit_map = match occlusion_texture {
         Some(occlusion_texture) => {
-            let occlusion_strength = occlusion_texture.strength();
+            let occlusion_multiplier = occlusion_texture.strength() / 255.0;
 
             match load_texture_image(gltf_path, occlusion_texture.texture()) {
                 Some(occlusion_map) => {
-                    let mut unlit_map = unlit_map.map_or(occlusion_map.clone(), |unlit_map| unlit_map);
+                    let mut unlit_map = unlit_map.unwrap_or_else(|| occlusion_map.clone());
 
-                    for (x, y, mut pixel) in unlit_map.enumerate_pixels_mut() {
+                    for (mut pixel, occlusion) in unlit_map.pixels_mut().zip(occlusion_map.pixels()) {
                         // Occlusion is on the red channel of the occlusion texture
-                        let occlusion_value = occlusion_map.get_pixel(x, y)[0];
-                        let occlusion_factor = (occlusion_value as f32 / 255.0) * occlusion_strength;
-
+                        let occlusion_factor = occlusion[0] as f32 * occlusion_multiplier;
                         pixel.data[0] = (pixel.data[0] as f32 * occlusion_factor) as u8;
                         pixel.data[1] = (pixel.data[1] as f32 * occlusion_factor) as u8;
                         pixel.data[2] = (pixel.data[2] as f32 * occlusion_factor) as u8;
@@ -114,11 +106,9 @@ fn generate_unlit<'a>(gltf_path: &Path, out_path: &Path, material: Material) -> 
     // Add the emissive map if it exists
     let unlit_map = match emissive_map {
         Some(emissive_map) => {
-            let mut unlit_map = unlit_map.map_or(emissive_map.clone(), |unlit_map| unlit_map);
+            let mut unlit_map = unlit_map.unwrap_or_else(|| emissive_map.clone());
 
-            for (x, y, mut pixel) in unlit_map.enumerate_pixels_mut() {
-                let emissive = emissive_map.get_pixel(x, y);
-
+            for (mut pixel, emissive) in unlit_map.pixels_mut().zip(emissive_map.pixels()) {
                 let emissive_r = ((emissive.data[0] as f32) * emissive_factor[0]) as u8;
                 let emissive_g = ((emissive.data[1] as f32) * emissive_factor[1]) as u8;
                 let emissive_b = ((emissive.data[2] as f32) * emissive_factor[2]) as u8;
