@@ -36,11 +36,27 @@ fn main() {
                 .map_or(gltf_path.clone(), |out| Path::new(out));
 
             let gltf = Gltf::from_reader(BufReader::new(file)).unwrap().validate_minimally().unwrap();
-            let generated_textures: Vec<_> = gltf.materials()
-                .map(|material| generate_unlit(gltf_path, out_path, material))
-                .collect();
+            let output = gltf.materials().map(|material| {
+                let img = generate_unlit(gltf_path, &material);
+                match img {
+                    Some(unlit_map) => {
+                        let path = match material.name() {
+                            Some(name) => format!("{}_unlit.png", name),
+                            None => format!("unlit_{}.png", material.index().unwrap())
+                        };
 
-            println!("{}", JsonValue::Array(generated_textures));
+                        fs::create_dir_all(&out_path).unwrap();
+
+                        let fout = &out_path.join(path);
+                        unlit_map.save(fout).unwrap();
+
+                        JsonValue::String(String::from(fout.to_str().unwrap()))
+                    },
+                    None => JsonValue::Null
+                }
+            });
+
+            println!("{}", JsonValue::Array(output.collect::<Vec<_>>()));
             process::exit(0);
         }
 
@@ -74,9 +90,8 @@ fn apply_emissive(img: &mut RgbaImage, emissive_map: &RgbaImage, color: [f32; 3]
     }
 }
 
-fn generate_unlit(gltf_dir: &Path, out_path: &Path, material: Material) -> JsonValue {
+fn generate_unlit(gltf_dir: &Path, material: &Material) -> Option<RgbaImage> {
     let pbr = material.pbr_metallic_roughness();
-
     let base_color_factor = pbr.base_color_factor();
 
     // Set the unlit_map to the base color map if it exists
@@ -116,23 +131,7 @@ fn generate_unlit(gltf_dir: &Path, out_path: &Path, material: Material) -> JsonV
         None => unlit_map
     };
 
-    match unlit_map {
-        Some(unlit_map) => {
-
-            let path = match material.name() {
-                Some(name) => format!("{}_unlit.png", name),
-                None => format!("unlit_{}.png", material.index().unwrap())
-            };
-
-            fs::create_dir_all(&out_path).unwrap();
-
-            let fout = &out_path.join(path);
-            unlit_map.save(fout).unwrap();
-
-            JsonValue::String(String::from(fout.to_str().unwrap()))
-        }
-        None => JsonValue::Null
-    }
+    unlit_map
 }
 
 fn load_image(dir: &Path, texture: &Texture) -> Option<RgbaImage> {
