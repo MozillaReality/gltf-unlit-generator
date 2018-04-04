@@ -56,6 +56,29 @@ fn main() {
     process::exit(1);
 }
 
+fn apply_occlusion(img: &mut RgbaImage, occlusion_map: &RgbaImage, strength: f32) {
+    let multiplier = strength / 255.0;
+    for (mut pixel, occ) in img.pixels_mut().zip(occlusion_map.pixels()) {
+        // Occlusion is on the red channel of the occlusion texture
+        let occlusion_factor = occ[0] as f32 * multiplier;
+        pixel.data[0] = (pixel.data[0] as f32 * occlusion_factor) as u8;
+        pixel.data[1] = (pixel.data[1] as f32 * occlusion_factor) as u8;
+        pixel.data[2] = (pixel.data[2] as f32 * occlusion_factor) as u8;
+    }
+}
+
+fn apply_emissive(img: &mut RgbaImage, emissive_map: &RgbaImage, color: [f32; 3]) {
+    for (mut pixel, em) in img.pixels_mut().zip(emissive_map.pixels()) {
+        let emissive_r = ((em.data[0] as f32) * color[0]) as u8;
+        let emissive_g = ((em.data[1] as f32) * color[1]) as u8;
+        let emissive_b = ((em.data[2] as f32) * color[2]) as u8;
+
+        pixel.data[0] = pixel.data[0].saturating_add(emissive_r);
+        pixel.data[1] = pixel.data[1].saturating_add(emissive_g);
+        pixel.data[2] = pixel.data[2].saturating_add(emissive_b);
+    }
+}
+
 fn generate_unlit<'a>(gltf_dir: &Path, out_path: &Path, material: Material) -> JsonValue {
     let pbr = material.pbr_metallic_roughness();
 
@@ -72,51 +95,27 @@ fn generate_unlit<'a>(gltf_dir: &Path, out_path: &Path, material: Material) -> J
         base_color_map
     });
 
-    let occlusion_texture = material.occlusion_texture();
-
     // Multiply the occlusion map if it exists
-    let unlit_map = match occlusion_texture {
-        Some(occlusion_texture) => {
-            let occlusion_multiplier = occlusion_texture.strength() / 255.0;
-
-            match load_image(gltf_dir, &occlusion_texture.texture()) {
-                Some(occlusion_map) => {
-                    let mut unlit_map = unlit_map.unwrap_or_else(|| occlusion_map.clone());
-
-                    for (mut pixel, occlusion) in unlit_map.pixels_mut().zip(occlusion_map.pixels()) {
-                        // Occlusion is on the red channel of the occlusion texture
-                        let occlusion_factor = occlusion[0] as f32 * occlusion_multiplier;
-                        pixel.data[0] = (pixel.data[0] as f32 * occlusion_factor) as u8;
-                        pixel.data[1] = (pixel.data[1] as f32 * occlusion_factor) as u8;
-                        pixel.data[2] = (pixel.data[2] as f32 * occlusion_factor) as u8;
-                    }
-
-                    Some(unlit_map)
-                },
-                None => unlit_map
-            }
+    let occlusion_texture = material.occlusion_texture();
+    let occlusion_strength = occlusion_texture.as_ref().map_or(0.0, |t| t.strength());
+    let occlusion_map = occlusion_texture.and_then(|info| load_image(gltf_dir, &info.texture()));
+    let unlit_map = match occlusion_map {
+        Some(occlusion_map) => {
+            let mut unlit_map = unlit_map.unwrap_or_else(|| occlusion_map.clone());
+            apply_occlusion(&mut unlit_map, &occlusion_map, occlusion_strength);
+            Some(unlit_map)
         },
         None => unlit_map
     };
 
-    let emissive_factor = material.emissive_factor();
-    let emissive_map = material.emissive_texture().and_then(|info| load_image(gltf_dir, &info.texture()));
-
     // Add the emissive map if it exists
+    let emissive_texture = material.emissive_texture();
+    let emissive_factor = material.emissive_factor();
+    let emissive_map = emissive_texture.and_then(|info| load_image(gltf_dir, &info.texture()));
     let unlit_map = match emissive_map {
         Some(emissive_map) => {
             let mut unlit_map = unlit_map.unwrap_or_else(|| emissive_map.clone());
-
-            for (mut pixel, emissive) in unlit_map.pixels_mut().zip(emissive_map.pixels()) {
-                let emissive_r = ((emissive.data[0] as f32) * emissive_factor[0]) as u8;
-                let emissive_g = ((emissive.data[1] as f32) * emissive_factor[1]) as u8;
-                let emissive_b = ((emissive.data[2] as f32) * emissive_factor[2]) as u8;
-
-                pixel.data[0] = pixel.data[0].saturating_add(emissive_r);
-                pixel.data[1] = pixel.data[1].saturating_add(emissive_g);
-                pixel.data[2] = pixel.data[2].saturating_add(emissive_b);
-            }
-
+            apply_emissive(&mut unlit_map, &emissive_map, emissive_factor);
             Some(unlit_map)
         },
         None => unlit_map
