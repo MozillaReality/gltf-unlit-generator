@@ -10,14 +10,9 @@ use std::path::Path;
 use std::process;
 
 use clap::{App, Arg};
-
 use image::{ImageError, RgbaImage};
-
-use gltf::Gltf;
-use gltf::Material;
+use gltf::{Gltf, Material, Texture};
 use gltf::image::Data;
-use gltf::Texture;
-
 use serde_json::Value as JsonValue;
 
 fn main() {
@@ -79,7 +74,7 @@ fn apply_emissive(img: &mut RgbaImage, emissive_map: &RgbaImage, color: [f32; 3]
     }
 }
 
-fn generate_unlit<'a>(gltf_dir: &Path, out_path: &Path, material: Material) -> JsonValue {
+fn generate_unlit(gltf_dir: &Path, out_path: &Path, material: Material) -> JsonValue {
     let pbr = material.pbr_metallic_roughness();
 
     let base_color_factor = pbr.base_color_factor();
