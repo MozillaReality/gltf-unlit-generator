@@ -11,11 +11,15 @@ use std::process;
 
 use clap::{App, Arg};
 
+use image::RgbaImage;
+
 use gltf::Gltf;
 use gltf::Material;
 use gltf::image::Data;
+use gltf::Texture;
+use gltf::texture::Info as TextureInfo;
 
-use serde_json::Value;
+use serde_json::Value as JsonValue;
 
 fn main() {
     let matches = App::new("gltf_unlit_generator")
@@ -32,29 +36,28 @@ fn main() {
 
     if let Some(gltf_file_path) = matches.value_of("input") {
         if let Ok(file) = File::open(gltf_file_path) {
-            let gltf = Gltf::from_reader(BufReader::new(file)).unwrap().validate_minimally().unwrap();
-
             let gltf_path = Path::new(gltf_file_path).parent().unwrap();
 
             let out_path = matches.value_of("out")
                 .map_or(gltf_path.clone(), |out| Path::new(out));
 
+            let gltf = Gltf::from_reader(BufReader::new(file)).unwrap().validate_minimally().unwrap();
             let generated_textures: Vec<_> = gltf.materials()
                 .map(|material| generate_unlit(gltf_path, out_path, material))
                 .collect();
 
-            println!("{}", Value::Array(generated_textures));
+            println!("{}", JsonValue::Array(generated_textures));
             process::exit(0);
         }
 
         println!("filePath: {}", gltf_file_path);
     }
 
-    println!("{}", Value::Null);
+    println!("{}", JsonValue::Null);
     process::exit(1);
 }
 
-fn generate_unlit<'a>(gltf_path: &Path, out_path: &Path, material: Material) -> Value {
+fn generate_unlit<'a>(gltf_path: &Path, out_path: &Path, material: Material) -> JsonValue {
     let pbr = material.pbr_metallic_roughness();
 
     let base_color_factor = pbr.base_color_factor();
@@ -82,7 +85,7 @@ fn generate_unlit<'a>(gltf_path: &Path, out_path: &Path, material: Material) -> 
     let unlit_map = match occlusion_texture {
         Some(occlusion_texture) => {
             let occlusion_strength = occlusion_texture.strength();
-            
+
             match load_texture_image(gltf_path, occlusion_texture.texture()) {
                 Some(occlusion_map) => {
                     let mut unlit_map = unlit_map.map_or(occlusion_map.clone(), |unlit_map| unlit_map);
@@ -129,10 +132,10 @@ fn generate_unlit<'a>(gltf_path: &Path, out_path: &Path, material: Material) -> 
         },
         None => unlit_map
     };
-    
+
     match unlit_map {
         Some(unlit_map) => {
-            
+
             let path = match material.name() {
                 Some(name) => format!("{}_unlit.png", name),
                 None => format!("unlit_{}.png", material.index().unwrap())
@@ -143,13 +146,13 @@ fn generate_unlit<'a>(gltf_path: &Path, out_path: &Path, material: Material) -> 
             let fout = &out_path.join(path);
             unlit_map.save(fout).unwrap();
 
-            Value::String(String::from(fout.to_str().unwrap()))
+            JsonValue::String(String::from(fout.to_str().unwrap()))
         }
-        None => Value::Null
+        None => JsonValue::Null
     }
 }
 
-fn load_texture_info_image(gltf_path: &Path, texture_info: Option<gltf::texture::Info>) -> Option<image::RgbaImage> {
+fn load_texture_info_image(gltf_path: &Path, texture_info: Option<TextureInfo>) -> Option<RgbaImage> {
     match texture_info {
         Some(texture_info) => {
             load_texture_image(gltf_path, texture_info.texture())
@@ -158,9 +161,9 @@ fn load_texture_info_image(gltf_path: &Path, texture_info: Option<gltf::texture:
     }
 }
 
-fn load_texture_image(gltf_path: &Path, texture: gltf::Texture) -> Option<image::RgbaImage> {
+fn load_texture_image(gltf_path: &Path, texture: Texture) -> Option<RgbaImage> {
     let image = texture.source();
-            
+
     match image.data() {
         Data::Uri { uri, .. } => {
             if let Ok(image) = image::open(gltf_path.join(uri)) {
