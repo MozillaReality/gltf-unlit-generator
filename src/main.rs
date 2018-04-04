@@ -11,13 +11,12 @@ use std::process;
 
 use clap::{App, Arg};
 
-use image::RgbaImage;
+use image::{ImageError, RgbaImage};
 
 use gltf::Gltf;
 use gltf::Material;
 use gltf::image::Data;
 use gltf::Texture;
-use gltf::texture::Info as TextureInfo;
 
 use serde_json::Value as JsonValue;
 
@@ -57,20 +56,20 @@ fn main() {
     process::exit(1);
 }
 
-fn generate_unlit<'a>(gltf_path: &Path, out_path: &Path, material: Material) -> JsonValue {
+fn generate_unlit<'a>(gltf_dir: &Path, out_path: &Path, material: Material) -> JsonValue {
     let pbr = material.pbr_metallic_roughness();
 
     let base_color_factor = pbr.base_color_factor();
 
     // Set the unlit_map to the base color map if it exists
-    let unlit_map = load_texture_info_image(gltf_path, pbr.base_color_texture()).map(|mut base_color_texture| {
-        for mut pixel in base_color_texture.pixels_mut() {
+    let unlit_map = pbr.base_color_texture().and_then(|info| load_image(gltf_dir, &info.texture())).map(|mut base_color_map| {
+        for mut pixel in base_color_map.pixels_mut() {
             pixel.data[0] = (pixel.data[0] as f32 * base_color_factor[0]) as u8;
             pixel.data[1] = (pixel.data[1] as f32 * base_color_factor[1]) as u8;
             pixel.data[2] = (pixel.data[2] as f32 * base_color_factor[2]) as u8;
             pixel.data[3] = (pixel.data[3] as f32 * base_color_factor[3]) as u8;
         }
-        base_color_texture
+        base_color_map
     });
 
     let occlusion_texture = material.occlusion_texture();
@@ -80,7 +79,7 @@ fn generate_unlit<'a>(gltf_path: &Path, out_path: &Path, material: Material) -> 
         Some(occlusion_texture) => {
             let occlusion_multiplier = occlusion_texture.strength() / 255.0;
 
-            match load_texture_image(gltf_path, occlusion_texture.texture()) {
+            match load_image(gltf_dir, &occlusion_texture.texture()) {
                 Some(occlusion_map) => {
                     let mut unlit_map = unlit_map.unwrap_or_else(|| occlusion_map.clone());
 
@@ -101,7 +100,7 @@ fn generate_unlit<'a>(gltf_path: &Path, out_path: &Path, material: Material) -> 
     };
 
     let emissive_factor = material.emissive_factor();
-    let emissive_map = load_texture_info_image(gltf_path, material.emissive_texture());
+    let emissive_map = material.emissive_texture().and_then(|info| load_image(gltf_dir, &info.texture()));
 
     // Add the emissive map if it exists
     let unlit_map = match emissive_map {
@@ -142,28 +141,15 @@ fn generate_unlit<'a>(gltf_path: &Path, out_path: &Path, material: Material) -> 
     }
 }
 
-fn load_texture_info_image(gltf_path: &Path, texture_info: Option<TextureInfo>) -> Option<RgbaImage> {
-    match texture_info {
-        Some(texture_info) => {
-            load_texture_image(gltf_path, texture_info.texture())
-        },
-        None => None
-    }
-}
-
-fn load_texture_image(gltf_path: &Path, texture: Texture) -> Option<RgbaImage> {
-    let image = texture.source();
-
-    match image.data() {
-        Data::Uri { uri, .. } => {
-            if let Ok(image) = image::open(gltf_path.join(uri)) {
-                Some(image.to_rgba())
-            } else {
-                panic!("Invalid image path {}", uri);
-            }
-        },
-        Data::View { .. } => {
-            eprintln!("Warning: Images in data views not currently supported. Skipping image[{}].", image.index());
+fn load_image(dir: &Path, texture: &Texture) -> Option<RgbaImage> {
+    let load_result = match texture.source().data() {
+        Data::Uri { uri, .. } => image::open(dir.join(uri)).map(|i| i.to_rgba()),
+        Data::View { .. } => Err(ImageError::FormatError(String::from("Images in data views not supported.")))
+    };
+    match load_result {
+        Ok(img) => Some(img),
+        Err(e) => {
+            eprintln!("{}", e);
             None
         }
     }
