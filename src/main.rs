@@ -3,17 +3,35 @@ extern crate clap;
 extern crate gltf;
 extern crate serde_json;
 
+use std::error::Error;
 use std::fs;
 use std::fs::File;
 use std::io::BufReader;
 use std::path::Path;
 use std::process;
 
-use clap::{App, Arg};
+use clap::{App, Arg, ArgMatches};
 use image::{ImageError, RgbaImage};
 use gltf::{Gltf, Material, Texture};
 use gltf::image::Data;
 use serde_json::Value as JsonValue;
+
+#[derive(Debug)]
+struct Options<'a> {
+    gltf: Gltf,
+    gltf_dir: &'a Path,
+    out_dir: &'a Path,
+}
+
+fn process_args<'a>(matches: &'a ArgMatches<'a>) -> Result<Options<'a>, Box<Error>> {
+    let gltf_path = matches.value_of("input").ok_or("A GLTF file must be provided.")?;
+    let gltf_file = File::open(gltf_path)?;
+    let gltf_dir = Path::new(gltf_path).parent().ok_or("Invalid GLTF file path.")?;
+    let gltf = Gltf::from_reader(BufReader::new(gltf_file))?.validate_minimally()?;
+    let out_dir = matches.value_of("out").map(Path::new).unwrap_or(gltf_dir);
+    fs::create_dir_all(out_dir)?;
+    Ok(Options { gltf, gltf_dir, out_dir })
+}
 
 fn main() {
     let matches = App::new("gltf_unlit_generator")
@@ -28,43 +46,43 @@ fn main() {
             .takes_value(true))
         .get_matches();
 
-    if let Some(gltf_file_path) = matches.value_of("input") {
-        if let Ok(file) = File::open(gltf_file_path) {
-            let gltf_path = Path::new(gltf_file_path).parent().unwrap();
-
-            let out_path = matches.value_of("out")
-                .map_or(gltf_path.clone(), |out| Path::new(out));
-
-            let gltf = Gltf::from_reader(BufReader::new(file)).unwrap().validate_minimally().unwrap();
-            let output = gltf.materials().map(|material| {
-                let img = generate_unlit(gltf_path, &material);
-                match img {
-                    Some(unlit_map) => {
-                        let path = match material.name() {
-                            Some(name) => format!("{}_unlit.png", name),
-                            None => format!("unlit_{}.png", material.index().unwrap())
-                        };
-
-                        fs::create_dir_all(&out_path).unwrap();
-
-                        let fout = &out_path.join(path);
-                        unlit_map.save(fout).unwrap();
-
-                        JsonValue::String(String::from(fout.to_str().unwrap()))
-                    },
+    match process_args(&matches) {
+        Ok(opts) => {
+            let results = opts.gltf.materials().map(|material| {
+                generate_unlit(&material, opts.gltf_dir).and_then(|img| {
+                    let filename = output_filename(&material);
+                    let path = opts.out_dir.join(filename);
+                    match img.save(&path) {
+                        Ok(()) => Some(path),
+                        Err(e) => {
+                            eprintln!("{}", e);
+                            None
+                        }
+                    }
+                })
+            });
+            let output = results.map(|path| {
+                match path {
+                    Some(path) => JsonValue::String(String::from(path.to_str().unwrap())),
                     None => JsonValue::Null
                 }
             });
-
             println!("{}", JsonValue::Array(output.collect::<Vec<_>>()));
             process::exit(0);
+        },
+        Err(e) => {
+            eprintln!("Error: {}", e);
+            println!("{}", JsonValue::Null);
+            process::exit(1);
         }
+    };
+}
 
-        println!("filePath: {}", gltf_file_path);
+fn output_filename(mat: &Material) -> String {
+    match mat.name() {
+        Some(name) => format!("{}_unlit.png", name),
+        None => format!("unlit_{}.png", mat.index().unwrap())
     }
-
-    println!("{}", JsonValue::Null);
-    process::exit(1);
 }
 
 fn apply_occlusion(img: &mut RgbaImage, occlusion_map: &RgbaImage, strength: f32) {
@@ -90,8 +108,8 @@ fn apply_emissive(img: &mut RgbaImage, emissive_map: &RgbaImage, color: [f32; 3]
     }
 }
 
-fn generate_unlit(gltf_dir: &Path, material: &Material) -> Option<RgbaImage> {
-    let pbr = material.pbr_metallic_roughness();
+fn generate_unlit(mat: &Material, gltf_dir: &Path) -> Option<RgbaImage> {
+    let pbr = mat.pbr_metallic_roughness();
     let base_color_factor = pbr.base_color_factor();
 
     // Set the unlit_map to the base color map if it exists
@@ -106,7 +124,7 @@ fn generate_unlit(gltf_dir: &Path, material: &Material) -> Option<RgbaImage> {
     });
 
     // Multiply the occlusion map if it exists
-    let occlusion_texture = material.occlusion_texture();
+    let occlusion_texture = mat.occlusion_texture();
     let occlusion_strength = occlusion_texture.as_ref().map_or(0.0, |t| t.strength());
     let occlusion_map = occlusion_texture.and_then(|info| load_image(gltf_dir, &info.texture()));
     let unlit_map = match occlusion_map {
@@ -119,8 +137,8 @@ fn generate_unlit(gltf_dir: &Path, material: &Material) -> Option<RgbaImage> {
     };
 
     // Add the emissive map if it exists
-    let emissive_texture = material.emissive_texture();
-    let emissive_factor = material.emissive_factor();
+    let emissive_texture = mat.emissive_texture();
+    let emissive_factor = mat.emissive_factor();
     let emissive_map = emissive_texture.and_then(|info| load_image(gltf_dir, &info.texture()));
     let unlit_map = match emissive_map {
         Some(emissive_map) => {
