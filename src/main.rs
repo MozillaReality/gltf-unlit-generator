@@ -1,6 +1,7 @@
 extern crate image;
 extern crate clap;
 extern crate gltf;
+extern crate gltf_json;
 extern crate serde_json;
 
 use std::error::Error;
@@ -14,6 +15,7 @@ use clap::{App, Arg, ArgMatches};
 use image::{DynamicImage, ImageError, Pixel, RgbImage, Rgba, RgbaImage};
 use gltf::{Gltf, Material, Texture};
 use gltf::image::Data;
+use gltf_json::material::AlphaMode;
 use serde_json::Value as JsonValue;
 
 #[derive(Debug)]
@@ -76,9 +78,13 @@ fn main() {
 }
 
 fn output_filename(mat: &Material) -> String {
+    let extension = match mat.alpha_mode() {
+        AlphaMode::Opaque => "jpg",
+        _ => "png"
+    };
     match mat.name() {
-        Some(name) => format!("{}_unlit.png", name),
-        None => format!("unlit_{}.png", mat.index().unwrap())
+        Some(name) => format!("{}_unlit.{}", name, extension),
+        None => format!("unlit_{}.{}", mat.index().unwrap(), extension)
     }
 }
 
@@ -147,7 +153,7 @@ fn generate_unlit(mat: &Material, gltf_dir: &Path) -> Result<RgbaImage, Box<Erro
         occlusion_map.as_ref().map(|i| i.dimensions()),
         emissive_map.as_ref().map(|i| i.dimensions())
     ];
-    let (w, h) = validate_dimensions(dimensions.into_iter().filter_map(|m| m.as_ref()))?;
+    let (w, h) = validate_dimensions(dimensions.into_iter().filter_map(|&m| m))?;
 
     // Set the unlit_map to the base color map if it exists
     let mut unlit_map = base_map.map_or_else(|| generate_monocolor(w, h, base_color_factor), |mut base_map| {

@@ -1,6 +1,6 @@
 [package]
 name = "gltf_unlit_generator"
-version = "0.2.0"
+version = "0.3.0"
 authors = ["Robert Long <rlong@mozilla.com>"]
 license = "MPL-2.0"
 description = "Generates an unlit texture for each of the materials in a .gltf file."
@@ -11,6 +11,7 @@ repository= "https://github.com/MozillaReality/gltf-unlit-generator.git"
 image = "0.18.0"
 clap = "2.31.2"
 serde_json = "1.0.13"
+gltf-json = "0.10.1"
 
 [dependencies.gltf]
 version = "0.10.1"
