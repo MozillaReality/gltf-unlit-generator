@@ -10,15 +10,16 @@ program
   .version(package.version)
   .usage('<gltfPath> [options]')
   .option("-o, --out <out>", "The directory to output the gltf and textures.")
+  .option("-l, --lighten <lighten>", "Scalar value 0.0 - 1.0 to be added to the RGB channels of the base color map.")
   .action((configPath, options) => {
-    execute(configPath, options.out).then(() => {
+    execute(configPath, options.out, options).then(() => {
       process.exit(0);
     }).catch((err) => {
       throw err;
     });
   });
 
-async function execute(gltfPath, outPath) {
+async function execute(gltfPath, outPath, options) {
   if (!fs.existsSync(gltfPath)) {
     throw new Error(`gltf file: ${gltfPath} does not exist`);
   }
@@ -26,7 +27,7 @@ async function execute(gltfPath, outPath) {
   const absoluteGltfPath = path.resolve(gltfPath);
   const absoluteOutPath = path.resolve(outPath);
 
-  await generateUnlitTextures(absoluteGltfPath, absoluteOutPath);
+  await generateUnlitTextures(absoluteGltfPath, absoluteOutPath, options);
 
   console.log("Done!");
 }

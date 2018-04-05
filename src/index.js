@@ -17,11 +17,15 @@ function execFileAsync(command, args) {
   });
 }
 
-module.exports = async function generateUnlitTextures(gltfPath, outPath) {
+module.exports = async function generateUnlitTextures(gltfPath, outPath, options) {
   let args = [gltfPath];
 
   if (outPath) {
-    args = args.concat(["-o", outPath]);
+    args.push("-o", outPath);
+  }
+
+  if (options && options.lighten) {
+    args.push("-l", options.lighten);
   }
 
   const gltf = await fs.readJSON(gltfPath);

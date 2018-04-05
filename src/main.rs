@@ -23,6 +23,7 @@ struct Options<'a> {
     gltf: Gltf,
     gltf_dir: &'a Path,
     out_dir: &'a Path,
+    lighten_factor: f32
 }
 
 fn process_args<'a>(matches: &'a ArgMatches<'a>) -> Result<Options<'a>, Box<Error>> {
@@ -31,8 +32,16 @@ fn process_args<'a>(matches: &'a ArgMatches<'a>) -> Result<Options<'a>, Box<Erro
     let gltf_dir = Path::new(gltf_path).parent().ok_or("Invalid GLTF file path.")?;
     let gltf = Gltf::from_reader(BufReader::new(gltf_file))?.validate_minimally()?;
     let out_dir = matches.value_of("out").map(Path::new).unwrap_or(gltf_dir);
+
+    let lighten = matches.value_of("lighten").unwrap_or("0.0");
+    let lighten_factor = lighten.parse::<f32>()?;
+
+    if lighten_factor < 0.0f32 || lighten_factor > 1.0f32 {
+        return Err(Box::new(clap::Error::value_validation_auto(String::from("Lighten value must be between 0.0 and 1.0."))));
+    }
+
     fs::create_dir_all(out_dir)?;
-    Ok(Options { gltf, gltf_dir, out_dir })
+    Ok(Options { gltf, gltf_dir, out_dir, lighten_factor })
 }
 
 fn main() {
@@ -46,12 +55,18 @@ fn main() {
             .value_name("out")
             .help("Where to output the texture files.")
             .takes_value(true))
+        .arg(Arg::with_name("lighten")
+            .short("l")
+            .long("lighten")
+            .value_name("lighten")
+            .help("Scalar value 0.0 - 1.0 to be added to the RGB channels of the base color map.")
+            .takes_value(true))
         .get_matches();
 
     match process_args(&matches) {
         Ok(opts) => {
             let results = opts.gltf.materials().map(|material| {
-                generate_unlit(&material, opts.gltf_dir).and_then(|img| {
+                generate_unlit(&material, opts.gltf_dir, opts.lighten_factor).and_then(|img| {
                     let filename = output_filename(&material);
                     let path = opts.out_dir.join(filename);
                     img.save(&path).map(|_| path).map_err(|e| From::from(e.description()))
@@ -131,7 +146,7 @@ fn generate_monocolor(w: u32, h: u32, color_factor: [f32; 4]) -> RgbaImage {
     ))
 }
 
-fn generate_unlit(mat: &Material, gltf_dir: &Path) -> Result<RgbaImage, Box<Error>> {
+fn generate_unlit(mat: &Material, gltf_dir: &Path, lighten_factor: f32) -> Result<RgbaImage, Box<Error>> {
     let pbr = mat.pbr_metallic_roughness();
     let base_texture = pbr.base_color_texture();
     let base_color_factor = pbr.base_color_factor();
@@ -152,12 +167,14 @@ fn generate_unlit(mat: &Material, gltf_dir: &Path) -> Result<RgbaImage, Box<Erro
     ];
     let (w, h) = validate_dimensions(dimensions.into_iter().filter_map(|&m| m))?;
 
+    let lighten = (lighten_factor * 255.0) as u8;
+
     // Set the unlit_map to the base color map if it exists
     let mut unlit_map = base_map.map_or_else(|| generate_monocolor(w, h, base_color_factor), |mut base_map| {
         for mut pixel in base_map.pixels_mut() {
-            pixel.data[0] = (pixel.data[0] as f32 * base_color_factor[0]) as u8;
-            pixel.data[1] = (pixel.data[1] as f32 * base_color_factor[1]) as u8;
-            pixel.data[2] = (pixel.data[2] as f32 * base_color_factor[2]) as u8;
+            pixel.data[0] = ((pixel.data[0] as f32 * base_color_factor[0]) as u8).saturating_add(lighten);
+            pixel.data[1] = ((pixel.data[1] as f32 * base_color_factor[1]) as u8).saturating_add(lighten);
+            pixel.data[2] = ((pixel.data[2] as f32 * base_color_factor[2]) as u8).saturating_add(lighten);
             pixel.data[3] = (pixel.data[3] as f32 * base_color_factor[3]) as u8;
         }
         base_map
