@@ -91,13 +91,10 @@ fn output_filename(mat: &Material) -> String {
 fn validate_dimensions<I: Iterator<Item=(u32, u32)>>(dimensions: I) -> Result<(u32, u32), Box<Error>> {
     let mut candidate = None;
     for d in dimensions {
-        if let Some(existing) = candidate {
-            if existing != d {
-                return Err(From::from(format!("Input map has inconsistent dimensions: {:?}", d)));
-            }
-        } else {
-            candidate = Some(d);
+        if candidate.is_some() && candidate != Some(d) {
+            return Err(From::from(format!("Input map has inconsistent dimensions: {:?}", d)));
         }
+        candidate = Some(d);
     }
     candidate.ok_or(From::from("No input maps were provided."))
 }
