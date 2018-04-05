@@ -1,6 +1,6 @@
 [package]
 name = "gltf_unlit_generator"
-version = "0.3.0"
+version = "0.4.0"
 authors = ["Robert Long <rlong@mozilla.com>"]
 license = "MPL-2.0"
 description = "Generates an unlit texture for each of the materials in a .gltf file."
