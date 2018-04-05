@@ -11,7 +11,7 @@ use std::path::Path;
 use std::process;
 
 use clap::{App, Arg, ArgMatches};
-use image::{ImageError, Pixel, Rgba, RgbaImage};
+use image::{DynamicImage, ImageError, Pixel, RgbImage, Rgba, RgbaImage};
 use gltf::{Gltf, Material, Texture};
 use gltf::image::Data;
 use serde_json::Value as JsonValue;
@@ -82,22 +82,21 @@ fn output_filename(mat: &Material) -> String {
     }
 }
 
-fn validate_dimensions<'a, I: Iterator<Item=&'a RgbaImage>>(imgs: I) -> Result<(u32, u32), Box<Error>> {
+fn validate_dimensions<I: Iterator<Item=(u32, u32)>>(dimensions: I) -> Result<(u32, u32), Box<Error>> {
     let mut candidate = None;
-    for img in imgs {
-        let dims = img.dimensions();
+    for d in dimensions {
         if let Some(existing) = candidate {
-            if existing != dims {
-                return Err(From::from(format!("Input map has inconsistent dimensions: {:?}", dims)));
+            if existing != d {
+                return Err(From::from(format!("Input map has inconsistent dimensions: {:?}", d)));
             }
         } else {
-            candidate = Some(dims);
+            candidate = Some(d);
         }
     }
     candidate.ok_or(From::from("No input maps were provided."))
 }
 
-fn apply_occlusion(img: &mut RgbaImage, occlusion_map: &RgbaImage, strength: f32) {
+fn apply_occlusion(img: &mut RgbaImage, occlusion_map: &RgbImage, strength: f32) {
     let multiplier = strength / 255.0;
     for (mut pixel, occ) in img.pixels_mut().zip(occlusion_map.pixels()) {
         // Occlusion is on the red channel of the occlusion texture
@@ -108,7 +107,7 @@ fn apply_occlusion(img: &mut RgbaImage, occlusion_map: &RgbaImage, strength: f32
     }
 }
 
-fn apply_emissive(img: &mut RgbaImage, emissive_map: &RgbaImage, color: [f32; 3]) {
+fn apply_emissive(img: &mut RgbaImage, emissive_map: &RgbImage, color: [f32; 3]) {
     for (mut pixel, em) in img.pixels_mut().zip(emissive_map.pixels()) {
         let emissive_r = ((em.data[0] as f32) * color[0]) as u8;
         let emissive_g = ((em.data[1] as f32) * color[1]) as u8;
@@ -133,17 +132,22 @@ fn generate_unlit(mat: &Material, gltf_dir: &Path) -> Result<RgbaImage, Box<Erro
     let pbr = mat.pbr_metallic_roughness();
     let base_texture = pbr.base_color_texture();
     let base_color_factor = pbr.base_color_factor();
-    let base_map = base_texture.and_then(|info| load_if_exists(gltf_dir, &info.texture()));
+    let base_map = base_texture.and_then(|info| load_if_exists(gltf_dir, &info.texture())).map(|i| i.to_rgba());
 
     let occlusion_texture = mat.occlusion_texture();
     let occlusion_strength = occlusion_texture.as_ref().map_or(0.0, |t| t.strength());
-    let occlusion_map = occlusion_texture.and_then(|info| load_if_exists(gltf_dir, &info.texture()));
+    let occlusion_map = occlusion_texture.and_then(|info| load_if_exists(gltf_dir, &info.texture())).map(|i| i.to_rgb());
 
     let emissive_texture = mat.emissive_texture();
     let emissive_factor = mat.emissive_factor();
-    let emissive_map = emissive_texture.and_then(|info| load_if_exists(gltf_dir, &info.texture()));
+    let emissive_map = emissive_texture.and_then(|info| load_if_exists(gltf_dir, &info.texture())).map(|i| i.to_rgb());
 
-    let (w, h) = validate_dimensions([&base_map, &occlusion_map, &emissive_map].iter().filter_map(|m| m.as_ref()))?;
+    let dimensions = [
+        base_map.as_ref().map(|i| i.dimensions()),
+        occlusion_map.as_ref().map(|i| i.dimensions()),
+        emissive_map.as_ref().map(|i| i.dimensions())
+    ];
+    let (w, h) = validate_dimensions(dimensions.into_iter().filter_map(|m| m.as_ref()))?;
 
     // Set the unlit_map to the base color map if it exists
     let mut unlit_map = base_map.map_or_else(|| generate_monocolor(w, h, base_color_factor), |mut base_map| {
@@ -169,9 +173,9 @@ fn generate_unlit(mat: &Material, gltf_dir: &Path) -> Result<RgbaImage, Box<Erro
     Ok(unlit_map)
 }
 
-fn load_if_exists(dir: &Path, texture: &Texture) -> Option<RgbaImage> {
+fn load_if_exists(dir: &Path, texture: &Texture) -> Option<DynamicImage> {
     let load_result = match texture.source().data() {
-        Data::Uri { uri, .. } => image::open(dir.join(uri)).map(|i| i.to_rgba()),
+        Data::Uri { uri, .. } => image::open(dir.join(uri)),
         Data::View { .. } => Err(ImageError::FormatError(String::from("Images in data views not supported.")))
     };
     match load_result {
