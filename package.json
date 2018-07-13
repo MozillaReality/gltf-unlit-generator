@@ -2,6 +2,12 @@
   "name": "gltf-unlit-generator",
   "version": "0.3.0",
   "main": "src/index.js",
+  "bin": "./bin/gltf-unlit-generator",
+  "files": [
+    "src/",
+    "bin/",
+    "LICENSE.md"
+  ],
   "license": "MPL-2.0",
   "repository": {
     "type": "git",
