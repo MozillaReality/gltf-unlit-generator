@@ -34,7 +34,10 @@ module.exports = async function generateUnlitTextures(gltfPath, outPath, options
     return;
   }
 
-  const { stdout } = await execFileAsync("gltf_unlit_generator", args);
+  const binExtension = process.platform === "win32" ? ".exe" : "";
+  const binPath = path.resolve(__dirname, "..", "bin", process.platform, "gltf_unlit_generator" + binExtension);
+
+  const { stdout } = await execFileAsync(binPath, args);
 
   const generatedTextures = JSON.parse(stdout.trim());
 
